@@ -1,0 +1,7 @@
+*.csv
+*.json
+.venv
+.vscode
+AlphaCLIP/
+__pycache__
+*.jpg
