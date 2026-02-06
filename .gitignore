@@ -5,3 +5,6 @@
 AlphaCLIP/
 __pycache__
 *.jpg
+checkpoints/
+*.pkl
+*.pth
