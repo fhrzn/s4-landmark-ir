@@ -1,6 +1,6 @@
 from typing import List
 
-import alpha_clip
+from AlphaCLIP import alpha_clip
 import numpy as np
 import torch
 from PIL import Image

@@ -3,7 +3,7 @@ import os
 from PIL import Image
 from transformers import AutoImageProcessor
 
-import constant
+from src import constant
 
 
 class MP16Dataset(Dataset):

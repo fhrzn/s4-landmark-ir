@@ -6,3 +6,4 @@ QDRANT_PORT = 6333
 BATCH_SIZE = 128
 SEED = 42
 IMAGE_BASE_PATH = "./datasets/mp16-reason"
+TOPK = 10

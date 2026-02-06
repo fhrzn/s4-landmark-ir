@@ -6,7 +6,7 @@ from qdrant_client import QdrantClient, models
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import constant
+from src import constant
 from src.pipeline.feature_extractor import FeatureExtractor
 from src.datasets.mp16 import MP16Dataset, collate_fn
 from src.utils import get_device, set_seed, create_collection
@@ -23,7 +23,7 @@ def main(args):
         device=device,
     )
 
-    df = pl.read_csv(args.dataset_csv)
+    df = pl.read_csv(args.data_path)
     dataset = MP16Dataset(
         df,
         img_col="IMG_ID",
@@ -32,7 +32,7 @@ def main(args):
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
-        collate_fn=collate_fn(extractor.mask_processor),
+        collate_fn=collate_fn,
     )
 
     client = QdrantClient(host=args.qdrant_host, port=args.qdrant_port)
@@ -48,20 +48,21 @@ def main(args):
                 all_outputs[key].extend(val)
 
     for i in tqdm(range(len(df)), desc="ingest"):
-        meta = df[i].to_dict(as_series=False)
+        meta = df[i].to_dicts()[0]
         # meta["image"] = base64.b64encode(
         #     Image.fromarray(all_outputs["images"][i]).tobytes()
         # ).decode("utf-8")
         meta["index"] = i
 
         qdrant_points = []
-        for sidx, (embed, mask) in tqdm(
-            enumerate(zip(all_outputs["alpha_embeddings"][i], all_outputs["masks"][i])),
+        for sidx, (embed, mask, label) in tqdm(
+            enumerate(zip(all_outputs["alpha_embeddings"][i], all_outputs["masks"][i], all_outputs["labels"][i])),
             desc="batch pack",
             leave=False,
         ):
             meta["segment_id"] = sidx
             meta["segment_mask"] = mask.tolist()
+            meta["segment_label"] = label
             # meta["segment_mask_img"] = base64.b64encode(
             #     Image.fromarray(mask).tobytes()
             # ).decode("utf-8")
