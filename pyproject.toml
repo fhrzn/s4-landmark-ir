@@ -14,3 +14,8 @@ dependencies = [
     "torchvision>=0.25.0",
     "transformers>=5.1.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+]
