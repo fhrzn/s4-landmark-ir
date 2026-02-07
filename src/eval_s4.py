@@ -49,7 +49,8 @@ def main(args):
                 all_outputs[key].extend(val)
 
     client = QdrantClient(host=args.qdrant_host, port=args.qdrant_port)
-    ref_metrics = []
+    prec_10 = []
+    prec_100 = []
     for i in tqdm(range(len(df_test)), desc="eval"):
         # query
         search_queries = [
@@ -75,9 +76,11 @@ def main(args):
         reranked_ref_gps = ref_gps[rank]
 
         # metrics
-        ref_metrics.append(metrics.precision_k(gt_gps, reranked_ref_gps))
+        prec_10.append(metrics.precision_k(gt_gps, reranked_ref_gps, min_dist=250))
+        prec_100.append(metrics.precision_k(gt_gps, reranked_ref_gps, k=100, min_dist=250))
 
-    print(np.mean(ref_metrics))
+    print(f"precision@10: {np.mean(prec_10).item()}")
+    print(f"precision@100: {np.mean(prec_100).item()}")
 
 
 def query_qdrant(
@@ -103,23 +106,6 @@ def merge_responses(query_res) -> List[dict]:
             if payload.get("index") not in merged_response:
                 merged_response[payload.get("index")] = payload
     return list(merged_response.values())
-
-
-def maybe_rerank(
-    merged_response: List[dict],
-    df_ref: pl.DataFrame,
-    gt_lat: Optional[float],
-    gt_lon: Optional[float],
-) -> List[dict]:
-    if gt_lat is None or gt_lon is None:
-        return merged_response
-
-    id_responses = [d["index"] for d in merged_response]
-    gps_responses = df_ref[id_responses][:, ["LAT", "LON"]].to_numpy()
-    distances = haversine(np.array((gt_lat, gt_lon)), gps_responses)
-    rank_desc = np.argsort(distances)[::-1]
-
-    return [{**merged_response[i], "distance": distances[i].item()} for i in rank_desc]
 
 
 if __name__ == "__main__":
