@@ -5,6 +5,7 @@ import numpy as np
 import polars as pl
 from qdrant_client import QdrantClient, models
 
+from src import metrics
 from src import constant
 from src.pipeline.feature_extractor import FeatureExtractor
 from src.utils import get_device, set_seed
@@ -46,9 +47,9 @@ def main(args):
                 all_outputs[key] = val
             else:
                 all_outputs[key].extend(val)
-        break
 
     client = QdrantClient(host=args.qdrant_host, port=args.qdrant_port)
+    ref_metrics = []
     for i in tqdm(range(len(df_test)), desc="eval"):
         # query
         search_queries = [
@@ -71,10 +72,12 @@ def main(args):
             {**query_res[i], "distance": distances[i].item()}
             for i in rank
         ]
+        reranked_ref_gps = ref_gps[rank]
 
-        # TODO: eval metrics
+        # metrics
+        ref_metrics.append(metrics.precision_k(gt_gps, reranked_ref_gps))
 
-        break
+    print(np.mean(ref_metrics))
 
 
 def query_qdrant(

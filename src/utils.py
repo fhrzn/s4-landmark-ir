@@ -30,7 +30,13 @@ def set_seed(seed: int) -> None:
 
 
 def get_device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device(
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.mps.is_available()
+        else "cpu"
+    )
 
 
 def create_collection(
