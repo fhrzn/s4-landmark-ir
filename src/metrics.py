@@ -8,6 +8,4 @@ def precision_k(
 ):
     """Out of the top-K results, how many are actually outside the forbidden radius?"""
     distances = haversine(gt_gps, ret_gps).T
-    if len(distances.shape) >= 2:
-        return np.mean(distances[:, :k] >= min_dist).item()
-    return np.mean(distances[:k] >= min_dist).item()
+    return np.mean(distances[:, :k] >= min_dist)

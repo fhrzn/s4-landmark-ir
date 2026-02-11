@@ -7,9 +7,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from src import constant
-from src.pipeline.feature_extractor import FeatureExtractor
 from src.datasets.mp16 import MP16Dataset, collate_fn
-from src.utils import get_device, set_seed, create_collection
+from src.pipeline.feature_extractor import FeatureExtractor
+from src.utils import create_collection, get_device, set_seed
 
 
 def main(args):
@@ -56,7 +56,13 @@ def main(args):
 
         qdrant_points = []
         for sidx, (embed, mask, label) in tqdm(
-            enumerate(zip(all_outputs["alpha_embeddings"][i], all_outputs["masks"][i], all_outputs["labels"][i])),
+            enumerate(
+                zip(
+                    all_outputs["alpha_embeddings"][i],
+                    all_outputs["masks"][i],
+                    all_outputs["labels"][i],
+                )
+            ),
             desc="batch pack",
             leave=False,
         ):

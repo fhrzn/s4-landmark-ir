@@ -5,11 +5,17 @@ import torch
 from qdrant_client import QdrantClient, models
 
 
-def haversine(origin: np.ndarray, destinations: np.ndarray) -> np.ndarray:
-    """Compute great-circle distance in kilometers."""
-    lat1, lon1 = np.radians(origin)
-    lat2 = np.radians(destinations[:, 0])
-    lon2 = np.radians(destinations[:, 1])
+def haversine(gps1: list | tuple | np.ndarray, gps2: list | tuple | np.ndarray):
+    if not isinstance(gps1, np.ndarray):
+        gps1 = np.array(gps1)
+    if not isinstance(gps2, np.ndarray):
+        gps2 = np.array(gps2)
+
+    gps1 = np.atleast_2d(gps1)
+    gps2 = np.atleast_2d(gps2)
+
+    lat1, lon1 = np.radians(gps1).T
+    lat2, lon2 = np.radians(gps2).T
 
     dlat = lat2 - lat1
     dlon = lon2 - lon1
@@ -17,7 +23,10 @@ def haversine(origin: np.ndarray, destinations: np.ndarray) -> np.ndarray:
     a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
     c = 2 * np.arcsin(np.sqrt(a))
 
-    return 6371.0 * c
+    dist = 6371 * c
+    if dist.size == 1:
+        return dist.item()
+    return dist
 
 
 def set_seed(seed: int) -> None:

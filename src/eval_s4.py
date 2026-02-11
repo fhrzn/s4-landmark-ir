@@ -49,8 +49,9 @@ def main(args):
                 all_outputs[key].extend(val)
 
     client = QdrantClient(host=args.qdrant_host, port=args.qdrant_port)
-    prec_10 = []
-    prec_100 = []
+
+    gt_gps = df_test.select("LAT", "LON").to_numpy().tolist()
+    all_ref_gps = []
     for i in tqdm(range(len(df_test)), desc="eval"):
         # query
         search_queries = [
@@ -65,22 +66,25 @@ def main(args):
         # rerank
         ref_ids = [d["index"] for d in query_res]
         ref_gps = df_ref[ref_ids][:, ["LAT", "LON"]].to_numpy()
-        gt_gps = df_test[i]["LAT", "LON"].to_numpy().reshape(-1)
+        all_ref_gps.append(ref_gps)
+        # gt_gps = df_test[i]["LAT", "LON"].to_numpy().reshape(-1)
 
-        distances = haversine(gt_gps, ref_gps)
-        rank = np.argsort(distances)[::-1]
-        reranked_response = [
-            {**query_res[i], "distance": distances[i].item()}
-            for i in rank
-        ]
-        reranked_ref_gps = ref_gps[rank]
+        # distances = haversine(gt_gps, ref_gps)
+        # rank = np.argsort(distances)[::-1]
+        # reranked_response = [
+        #     {**query_res[i], "distance": distances[i].item()}
+        #     for i in rank
+        # ]
+        # reranked_ref_gps = ref_gps[rank]
 
         # metrics
-        prec_10.append(metrics.precision_k(gt_gps, reranked_ref_gps, min_dist=250))
-        prec_100.append(metrics.precision_k(gt_gps, reranked_ref_gps, k=100, min_dist=250))
+        # prec_10.append(metrics.precision_k(gt_gps, ref_gps, min_dist=250))
+        # prec_100.append(metrics.precision_k(gt_gps, ref_gps, k=100, min_dist=250))
 
-    print(f"precision@10: {np.mean(prec_10).item()}")
-    print(f"precision@100: {np.mean(prec_100).item()}")
+    all_ref_gps = np.array(all_ref_gps)
+
+    print(f"precision@10: {metrics.precision_k(gt_gps, all_ref_gps, k=10, min_dist=250).item()}")
+    print(f"precision@100: {metrics.precision_k(gt_gps, all_ref_gps, k=100, min_dist=250).item()}")
 
 
 def query_qdrant(
