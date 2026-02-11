@@ -51,7 +51,7 @@ JSON Schema:
 async def main(args):
     # vllm server
     client = AsyncOpenAI(
-        base_url="http://localhost:3456/v1", api_key="token-is-ignored"
+        base_url=os.path.join(args.vllm_url, "v1"), api_key=args.vllm_token
     )
 
     # prepare prompt
@@ -112,9 +112,9 @@ async def llm_call(
 ):
     async with semaphore:
         # simple limiter
-        await asyncio.sleep(1)
         # simple retry mechanism
         for it in range(3):
+            await asyncio.sleep(1)
             # handle llm retry for invalid structured output
             try:
                 response = await client.beta.chat.completions.parse(
@@ -127,7 +127,8 @@ async def llm_call(
                 )
                 return idx, response.choices[0].message.parsed.model_dump()
             except Exception:
-                await asyncio.sleep(10)
+                # retrying
+                continue
 
         return idx, None
 
@@ -186,6 +187,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--data-path", required=True)
     parser.add_argument("--output-path", required=True)
+    parser.add_argument("--vllm-url", default="http://localhost:3456")
+    parser.add_argument("--vllm-token", default="token-is-ignored")
     parser.add_argument("--base-img-path", default="./datasets/mp16-reason")
     args = parser.parse_args()
 
