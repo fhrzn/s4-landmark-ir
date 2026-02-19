@@ -5,3 +5,8 @@
 AlphaCLIP/
 __pycache__
 *.jpg
+checkpoints/
+*.pkl
+*.pth
+.DS_Store
+index
