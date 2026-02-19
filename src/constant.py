@@ -6,5 +6,19 @@ QDRANT_PORT = 6333
 BATCH_SIZE = 64
 SEED = 42
 IMAGE_BASE_PATH = "./datasets/mp16-reason"
-TOPK = 10
+TOPK = 100
 HF_VLM_NAME = "Qwen/Qwen3-VL-2B-Instruct"
+
+LABELS2ID = {
+    "religious_site": 0,
+    "historic_civic": 1,
+    "monument_memorial": 2,
+    "tower": 3,
+    "bridge": 4,
+    "gate": 5,
+    "museum_culture": 6,
+    "leisure_park": 7,
+    "urban_scene": 8,
+    "natural": 9,
+    "unknown": -1,
+}

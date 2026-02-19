@@ -3,6 +3,10 @@ import random
 import numpy as np
 import torch
 from qdrant_client import QdrantClient, models
+import faiss
+import os
+import json
+from typing import List, Dict
 
 
 def haversine(gps1: list | tuple | np.ndarray, gps2: list | tuple | np.ndarray):
@@ -61,3 +65,36 @@ def create_collection(
             collection_name=name,
             vectors_config=models.VectorParams(size=vector_size, distance=distance),
         )
+
+
+def clip_collate_fn(processor, batch):
+    images = [b["image"] for b in batch]
+    inputs = processor(images=images, return_tensors="pt")
+    return inputs
+
+
+def build_index(d: int = 768):
+    index = faiss.IndexHNSWFlat(d, 32, faiss.METRIC_INNER_PRODUCT)
+    return index
+
+
+def add_record_to_index(index: faiss.IndexHNSWFlat, embeddings: np.ndarray):
+    faiss.normalize_L2(embeddings)
+    index.add(embeddings)
+
+
+def save_index(index: faiss.IndexHNSWFlat, metadata: List[Dict], target_dir: str):
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir, exist_ok=True)
+
+    faiss.write_index(index, os.path.join(target_dir, "index.index"))
+    with open(os.path.join(target_dir, "metadata.json"), "w") as f:
+        json.dump({"metadata": metadata}, f)
+
+
+def read_index(target_dir: str):
+    index = faiss.read_index(os.path.join(target_dir, "index.index"))
+    with open(os.path.join(target_dir, "metadata.json"), "r") as f:
+        metadata = json.loads(f.read())
+
+    return index, metadata

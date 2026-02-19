@@ -1,32 +1,29 @@
 import argparse
 import json
-import os
+from functools import partial
 
 import faiss
 import numpy as np
+import pandas as pd
 import polars as pl
+import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from transformers import AutoModel, AutoProcessor
 
 from src import constant
-from src.datasets.mp16 import MP16Dataset, collate_fn
-from src.geoclip import GeoCLIP
+from src.datasets.mp16 import MP16Dataset
 from src.metrics import map_k, precision_k
-from src.pipeline.feature_extractor import FeatureExtractor
-from src.utils import get_device, haversine, read_index, set_seed
+from src.utils import clip_collate_fn, get_device, read_index, set_seed
 
 
 def main(args):
     # prepare
     set_seed(args.seed)
     device = get_device()
-    extractor = FeatureExtractor(
-        alpha_clip_name=args.alpha_clip_name,
-        mask_model_name=args.mask_model_name,
-        alpha_vision_ckpt_pth=args.alpha_vision_ckpt,
-        device=device,
-    )
-    geoclip_model = GeoCLIP().to(device)
+    clip_processor = AutoProcessor.from_pretrained("openai/clip-vit-large-patch14")
+    clip_model = AutoModel.from_pretrained("openai/clip-vit-large-patch14").to(device)
+    clip_model = clip_model.eval()
 
     # dataset
     df_test = pl.read_csv(args.data_path)
@@ -38,57 +35,42 @@ def main(args):
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
-        collate_fn=collate_fn,
+        collate_fn=partial(clip_collate_fn, clip_processor),
     )
     index, ref_meta = read_index(args.index_dir)
     index.hnsw.efSearch = 128
     ref_meta = ref_meta["metadata"]
 
-    # mask
-    all_outputs = {}
-    for batch, target, images in tqdm(loader, desc="Mask"):
-        out = extractor(batch, images, target)
-        for key, val in out.items():
-            if key not in all_outputs:
-                all_outputs[key] = val
-            else:
-                all_outputs[key].extend(val)
+    # encode
+    embeddings = []
+    # pred_gps = []
+    with torch.no_grad():
+        for batch in tqdm(loader, desc="encode"):
+            batch = {k: v.to(device) for k, v in batch.items()}
+            out = clip_model.get_image_features(**batch)
+            out = out.pooler_output.cpu()
+            embeddings.append(out)
 
-    # predict gps for reranking later
-    pred_gps = []
-    img_paths = df_test["IMG_ID"].to_list()
-    for i in tqdm(range(0, len(df_test), args.batch_size), desc="predict gps"):
-        paths = img_paths[i : i + args.batch_size]
-        paths = [os.path.join("./datasets/mp16-reason", p) for p in paths]
-        _gps, _ = geoclip_model.predict_batch(paths, top_k=1)
-        _gps = _gps.view(-1, 2)
-        pred_gps.extend(_gps.tolist())
+    embeddings = torch.vstack(embeddings).numpy()
 
     # similarity search
     all_ref_gps = []
     all_metas = {}
     for i in tqdm(range(len(df_test)), desc="eval"):
-        query_emb = all_outputs["alpha_embeddings"][i].astype("float32")
+        query_emb = embeddings[i].astype("float32").reshape(1, -1)
         faiss.normalize_L2(query_emb)
         sim, ind = index.search(query_emb, args.topk)
-        _, flat_I = sim.reshape(-1), ind.reshape(-1)
-        sim_meta = [ref_meta[ii] for ii in flat_I]
-        sim_meta = (
-            pl.DataFrame([ref_meta[ii] for ii in flat_I])
-            .unique(subset=["idx"])
-            .to_dicts()
+        flat_D, flat_I = sim.reshape(-1), ind.reshape(-1)
+        sorted_sim_ids = (
+            pd.DataFrame({"idx": flat_I, "score": flat_D})
+            .sort_values(by="score", ascending=False)
+            .drop_duplicates(subset="idx")
+            .idx.tolist()
         )
-        ref_gps = [[item["LAT"], item["LON"]] for item in sim_meta]
-
-        # reranking
-        ranks = np.argsort(haversine(pred_gps[i], ref_gps))[::-1]
-        sim_meta = [sim_meta[i] for i in ranks]
-        ref_gps = [ref_gps[i] for i in ranks]
-
+        sim_meta = [ref_meta[ii] for ii in sorted_sim_ids][: args.topk]
         all_metas[i] = sim_meta
+        ref_gps = [[item["LAT"], item["LON"]] for item in sim_meta]
         all_ref_gps.append(ref_gps)
-
-    all_ref_gps = np.array(all_ref_gps)
 
     # compute metrics
     gt_gpses = np.array([[item["LAT"], item["LON"]] for item in df_test.to_dicts()])
@@ -109,7 +91,7 @@ def main(args):
 
     print(metrics)
 
-    with open("s4_retrieval_meta.json", "w") as f:
+    with open("clip_retrieval_meta.json", "w") as f:
         f.write(json.dumps(all_metas))
 
 
